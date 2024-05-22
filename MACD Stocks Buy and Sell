@@ -1,0 +1,67 @@
+import yfinance as yf
+import pandas as pd
+import ta
+import time
+import os
+
+def fetch_stock_data(tickers, period='1d', interval='1m'):
+    data = {}
+    for ticker in tickers:
+        stock_data = yf.download(ticker, period=period, interval=interval)
+        data[ticker] = stock_data
+    return data
+
+def calculate_indicators(data):
+    for ticker, df in data.items():
+        df['MACD'] = ta.trend.macd(df['Close'])
+        df['MACD_Signal'] = ta.trend.macd_signal(df['Close'])
+        df['MACD_Diff'] = df['MACD'] - df['MACD_Signal']
+    return data
+
+def generate_signals(data):
+    signals = {}
+    for ticker, df in data.items():
+        latest_row = df.iloc[-1]
+        timestamp = latest_row.name.strftime('%Y-%m-%d %H:%M:%S')
+        if latest_row['MACD_Diff'] > 0:
+            signals[ticker] = (latest_row['Close'], 'buy', timestamp)
+        elif latest_row['MACD_Diff'] < 0:
+            signals[ticker] = (latest_row['Close'], 'sell', timestamp)
+        else:
+            signals[ticker] = (latest_row['Close'], 'hold', timestamp)
+    return signals
+
+def analyze_stocks(tickers):
+    period = '1d'
+    interval = '1m'
+
+    stock_data = fetch_stock_data(tickers, period=period, interval=interval)
+    stock_data = calculate_indicators(stock_data)
+    signals = generate_signals(stock_data)
+
+    return signals
+
+# List of stocks (you can modify this list as needed)
+tickers = [
+    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'PG', 'MA', 'PYPL',
+    'NFLX', 'ADBE', 'CMCSA', 'PFE', 'PEP', 'T', 'MRK', 'WMT', 'CSCO', 'INTC', 'ABT',
+    'CVX', 'TMO', 'ABBV', 'ACN', 'NKE', 'MDT', 'ORCL'
+]
+
+def clear_console():
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+
+try:
+    while True:
+        signals = analyze_stocks(tickers)
+
+        clear_console()  # Clear the console output
+
+        for ticker, (price, signal, timestamp) in signals.items():
+            print(f"{ticker}-----{price:.2f}-----{signal}-----{timestamp}")
+# Run the analysis continuously every 5 seconds
+        print("-----")
+        time.sleep(5)  #refresh rate
+except KeyboardInterrupt:
+    print("Stopped by user.")
