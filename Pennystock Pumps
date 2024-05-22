@@ -1,0 +1,49 @@
+import yfinance as yf
+import pandas as pd
+import time
+
+# List of 20 penny stocks (example)
+penny_stocks = ['BBIG', 'CEI', 'SNDL', 'ZOM', 'FCEL', 'GME', 'AMC', 'NOK', 'AAPL', 'MSFT',
+                'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'BABA', 'V', 'JPM', 'BAC', 'DIS']
+
+def fetch_data(ticker):
+
+    return yf.download(ticker, period="3mo", interval="1d")
+
+def check_volume_spike(data):
+    # Calculate the average volume over the past month
+    avg_volume = data['Volume'].rolling(window=30).mean()
+    # Find days where the volume is more than twice the average volume
+    volume_spike = data['Volume'] > (2 * avg_volume)
+    return data[volume_spike]
+
+def check_price_increase(data):
+    # Calculate the percentage price increase over the last 30 days
+    price_increase = (data['Close'] / data['Close'].shift(30)) - 1
+    # Find days where the price increase is more than 100%
+    return data[price_increase <= 1]
+
+def analyze_stocks(stocks):
+    results = []
+    for stock in stocks:
+        data = fetch_data(stock)
+        spiked_data = check_volume_spike(data)
+        if not spiked_data.empty:
+            filtered_data = check_price_increase(spiked_data)
+            if not filtered_data.empty:
+                results.append((stock, filtered_data))
+    return results
+
+def print_results(results):
+    for stock, data in results:
+        print(f"Stock: {stock}")
+        print(data[['Close', 'Volume']])
+
+# Continuously scan and update every 5 seconds
+while True:
+    spiked_stocks = analyze_stocks(penny_stocks)
+    if spiked_stocks:
+        # Clear the previous output
+        print("\033c", end="")
+        print_results(spiked_stocks)
+    time.sleep(5)
