@@ -1,0 +1,94 @@
+import yfinance as yf
+import pandas as pd
+import ta
+import time
+
+# Expanded list of stocks to screen
+stocks = [
+    'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'TSLA', 'META', 'NFLX', 'NVDA', 'PYPL', 'INTC',
+    'AMD', 'BABA', 'DIS', 'UBER', 'LYFT', 'ZM', 'SQ', 'SHOP', 'SPOT', 'SNAP', 'BA',
+    'WMT', 'NKE', 'T', 'VZ', 'PFE', 'MRK', 'CSCO', 'KO', 'PEP', 'MCD', 'XOM', 'CVX',
+    'GS', 'JPM', 'BAC', 'WFC', 'C', 'USB', 'AXP', 'GE', 'MMM', 'HON', 'IBM', 'CAT',
+    'RTX', 'LMT', 'MMM', 'MMM', 'MDT', 'DHR', 'ABT', 'BMY', 'UNH', 'JNJ', 'GILD'
+]
+
+# Track the state of each stock
+stock_state = {stock: {'holding': False, 'buy_price': None, 'buy_time': None} for stock in stocks}
+
+# Fetch historical data
+def fetch_data(ticker):
+    try:
+        data = yf.download(ticker, period='1d', interval='1m')
+        return data
+    except Exception as e:
+        print(f"Error fetching data for {ticker}: {e}")
+        return None
+
+# Calculate indicators
+def calculate_indicators(df):
+    df['MACD'] = ta.trend.macd_diff(df['Close'])
+    df['RSI'] = ta.momentum.rsi(df['Close'])
+    df['EMA_50'] = ta.trend.ema_indicator(df['Close'], window=50)
+    return df
+
+# Generate buy/sell signals
+def generate_signals(df):
+    df['Buy_Signal'] = (
+        (df['MACD'] > 0) &
+        (df['RSI'] < 30)
+    )
+    df['Sell_Signal'] = (
+        (df['MACD'] < 0) &
+        (df['RSI'] > 70) &
+        (df['Close'] < df['EMA_50'])  # Additional filter
+    )
+    return df
+
+# Analyze stocks and print signals with profit/loss calculation
+def analyze_stocks():
+    for stock in stocks:
+        data = fetch_data(stock)
+        if data is not None:
+            data = calculate_indicators(data)
+            data = generate_signals(data)
+            buy_signals = data[data['Buy_Signal']]
+            sell_signals = data[data['Sell_Signal']]
+
+            # Check for buy signals if not already holding
+            if not stock_state[stock]['holding']:
+                if not buy_signals.empty:
+                    buy_time = buy_signals.index[0]
+                    buy_price = buy_signals.iloc[0]['Close']
+                    stock_state[stock]['holding'] = True
+                    stock_state[stock]['buy_price'] = buy_price
+                    stock_state[stock]['buy_time'] = buy_time
+                    print(f"Buy Signal: {stock} at {buy_time} - Price: {buy_price}")
+
+            # Check for sell signals if holding
+            if stock_state[stock]['holding']:
+                future_sell_signals = sell_signals[sell_signals.index > stock_state[stock]['buy_time']]
+                if not future_sell_signals.empty:
+                    sell_time = future_sell_signals.index[0]
+                    sell_price = future_sell_signals.iloc[0]['Close']
+                    profit_loss = sell_price - stock_state[stock]['buy_price']
+                    print(f"Sell Signal: {stock} at {sell_time} - Price: {sell_price}")
+                    print(f"Profit/Loss for {stock} from {stock_state[stock]['buy_time']} to {sell_time}: {profit_loss}")
+
+                    # Reset state after selling
+                    stock_state[stock]['holding'] = False
+                    stock_state[stock]['buy_price'] = None
+                    stock_state[stock]['buy_time'] = None
+
+# Main function
+def main():
+    try:
+        while True:
+            print("Analyzing stocks...")
+            analyze_stocks()
+            print("Waiting for 30 seconds...")
+            time.sleep(30)  # Wait for 30 seconds before the next analysis
+    except KeyboardInterrupt:
+        print("Program ended by user.")
+
+if __name__ == "__main__":
+    main()
